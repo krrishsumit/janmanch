@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0E1014">
+    <title>JanManch</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header id="topbar" class="topbar"></header>
+<div class="layout">
+    <nav id="sidebar" class="sidebar"></nav>
+    <main id="content" class="content">
+        <div id="chips" class="chips" hidden></div>
+        <div id="top"></div>
+        <div id="heading" class="section-head" hidden><h2 id="heading-text"></h2></div>
+        <div id="grid" class="video-grid"></div>
+        <div id="status"></div>
+        <div class="row" style="justify-content: center; margin-top: 28px;">
+            <button id="more" type="button" class="btn" hidden>Load more</button>
+        </div>
+    </main>
+</div>
+<nav id="bottom-nav" class="bottom-nav"></nav>
+
+<script src="/js/app.js"></script>
+<script>
+    const params = new URLSearchParams(location.search);
+    const query = (params.get("q") || "").trim();
+    const channelId = params.get("channel");
+    const tab = ["trending", "subscriptions", "history"].includes(params.get("tab")) ? params.get("tab") : "home";
+    const isHome = tab === "home" && !query && !channelId;
+
+    const CATEGORIES = ["Music", "Cricket", "Comedy", "News", "Cooking", "Tech", "Education", "Travel", "Gaming"];
+
+    const grid = $("#grid");
+    const status = $("#status");
+    const more = $("#more");
+    let page = 0;
+    let shownIds = new Set();
+
+    renderShell(query || channelId ? null : tab);
+
+    function setHeading(text) {
+        $("#heading").hidden = false;
+        $("#heading-text").textContent = text;
+    }
+
+    function renderChips() {
+        const chips = $("#chips");
+        const activeChip = query.toLowerCase();
+        chips.append(el("a", { href: "/", class: "chip" + (isHome ? " active" : "") }, "All"));
+        for (const name of CATEGORIES) {
+            const active = activeChip === name.toLowerCase();
+            chips.append(el("a", { href: "/?q=" + encodeURIComponent(name.toLowerCase()),
+                class: "chip" + (active ? " active" : ""), "aria-current": active ? "page" : null }, name));
+        }
+        chips.hidden = false;
+    }
+
+    /** Which API to call for the current page, and how to turn its items into videos. */
+    function source() {
+        if (channelId) return { path: "/channels/" + encodeURIComponent(channelId) + "/videos?size=24&page=" + page };
+        if (query) return { path: "/videos/search?size=24&q=" + encodeURIComponent(query) + "&page=" + page };
+        if (tab === "trending") return { path: "/videos/trending", single: true };
+        if (tab === "subscriptions") return { path: "/videos/subscriptions?size=24&page=" + page, login: true };
+        if (tab === "history") return { path: "/users/me/history?size=24&page=" + page, login: true, history: true };
+        return { path: "/videos/feed?size=24&page=" + page };
+    }
+
+    async function renderFeatured() {
+        try {
+            const trending = await api("/videos/trending");
+            const video = trending.items[0];
+            if (!video) return;
+            shownIds.add(video.id);
+            $("#top").append(el("section", { class: "featured panel", "aria-label": "Featured" },
+                thumbnail(video, { href: watchUrl(video.id), flag: "TRENDING", iconSize: 72 }),
+                el("div", { class: "featured-text" },
+                    el("div", { class: "muted small", style: { fontWeight: "600" } },
+                        formatViews(video.viewCount) + " · " + timeAgo(video.uploadedAt)),
+                    el("h1", {}, video.title),
+                    el("a", { href: channelUrl(video.channelId), class: "row" },
+                        avatar(video.channelName, 36), el("strong", {}, video.channelName)),
+                    el("div", { class: "row" },
+                        el("a", { href: watchUrl(video.id), class: "btn primary" }, icon("play", 16), "Watch now"),
+                        el("a", { href: "/?tab=trending", class: "btn" }, "More trending")))));
+        } catch (err) { /* the feed below still loads */ }
+    }
+
+    async function renderChannelHeader() {
+        try {
+            const channel = await api("/channels/" + encodeURIComponent(channelId));
+            document.title = channel.name + " · JanManch";
+            let isOwn = false;
+            if (getToken()) {
+                try { isOwn = (await api("/users/me")).channelId === channel.id; } catch (e) { /* ignore */ }
+            }
+            const subs = el("div", { class: "muted" }, formatCount(channel.subscriberCount, "subscriber", "subscribers"));
+            const button = el("button", { type: "button" });
+            const paint = () => {
+                button.className = channel.subscribed ? "btn filled" : "btn light";
+                button.textContent = channel.subscribed ? "Subscribed" : "Subscribe";
+                subs.textContent = formatCount(channel.subscriberCount, "subscriber", "subscribers");
+            };
+            button.addEventListener("click", async () => {
+                if (!getToken()) { location.href = loginUrl(); return; }
+                try {
+                    const next = await api("/channels/" + channel.id + "/subscribe",
+                        { method: channel.subscribed ? "DELETE" : "POST" });
+                    Object.assign(channel, next);
+                    paint();
+                } catch (err) { toast(err.message); }
+            });
+            paint();
+            $("#top").append(el("section", { class: "channel-head panel" },
+                avatar(channel.name, 80),
+                el("div", { style: { flex: "1", minWidth: "200px" } },
+                    el("h1", {}, channel.name), subs,
+                    channel.description ? el("div", { class: "muted", style: { marginTop: "6px" } }, channel.description) : null),
+                isOwn ? el("a", { href: "/studio.html", class: "btn filled" }, "Manage videos") : button));
+            setHeading("Videos");
+        } catch (err) {
+            $("#top").append(stateBox("Channel not found", err.message));
+        }
+    }
+
+    async function load() {
+        const src = source();
+        if (src.login && !getToken()) {
+            status.replaceChildren(stateBox("Log in to see this",
+                tab === "history" ? "Videos you watch will be listed here." : "Videos from channels you subscribe to will be listed here.",
+                el("a", { href: loginUrl(), class: "btn primary" }, "Log in")));
+            return;
+        }
+        more.hidden = true;
+        status.replaceChildren(el("div", { class: "state" }, "Loading…"));
+        try {
+            const result = await api(src.path);
+            const items = src.history
+                ? result.items.map(h => ({ video: h.video, extra: "watched " + timeAgo(h.watchedAt) }))
+                : result.items.map(v => ({ video: v }));
+            for (const { video, extra } of items) {
+                if (!src.history && shownIds.has(video.id)) continue;
+                shownIds.add(video.id);
+                grid.append(videoCard(video, extra));
+            }
+            status.replaceChildren();
+            if (!grid.children.length) status.replaceChildren(emptyState());
+            more.hidden = src.single || page + 1 >= result.totalPages;
+        } catch (err) {
+            status.replaceChildren(stateBox("Couldn't load videos", err.message,
+                el("button", { type: "button", class: "btn", onclick: () => load() }, "Try again")));
+        }
+    }
+
+    function emptyState() {
+        if (query) return stateBox("No results for “" + query + "”", "Try a different word or a #tag.");
+        if (channelId) return stateBox("No videos yet", "This channel hasn't published anything.");
+        if (tab === "subscriptions") return stateBox("Nothing here yet", "Subscribe to channels and their new videos will show up here.",
+            el("a", { href: "/", class: "btn" }, "Browse videos"));
+        if (tab === "history") return stateBox("No watch history", "Videos you watch will be listed here.");
+        return stateBox("No videos yet", "Be the first to upload one.",
+            el("a", { href: getToken() ? "/upload.html" : loginUrl(), class: "btn primary" }, icon("plus", 18), "Upload a video"));
+    }
+
+    more.addEventListener("click", () => { page++; load(); });
+
+    (async () => {
+        if (isHome || CATEGORIES.some(c => c.toLowerCase() === query.toLowerCase())) renderChips();
+        if (channelId) {
+            await renderChannelHeader();
+        } else if (query) {
+            document.title = query + " · JanManch";
+            setHeading("Results for “" + query + "”");
+        } else if (tab === "trending") {
+            document.title = "Trending · JanManch";
+            setHeading("Trending now");
+        } else if (tab === "subscriptions") {
+            document.title = "Subscriptions · JanManch";
+            setHeading("From your subscriptions");
+        } else if (tab === "history") {
+            document.title = "History · JanManch";
+            setHeading("Watch history");
+        } else {
+            await renderFeatured();
+            setHeading("Latest videos");
+        }
+        load();
+    })();
+</script>
+</body>
+</html>

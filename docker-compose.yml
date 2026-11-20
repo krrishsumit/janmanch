@@ -1,0 +1,30 @@
+# Local development services: MySQL, Redis and a single-node Kafka.
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: janmanch-mysql
+    environment:
+      MYSQL_DATABASE: janmanch_db
+      MYSQL_USER: janmanch
+      MYSQL_PASSWORD: janmanch_local
+      MYSQL_ROOT_PASSWORD: root_local
+    ports:
+      - "3306:3306"
+    volumes:
+      - janmanch_mysql_data:/var/lib/mysql
+
+  redis:
+    image: redis:7
+    container_name: janmanch-redis
+    ports:
+      - "6379:6379"
+
+  kafka:
+    # Runs in KRaft mode with the image defaults (listens on localhost:9092).
+    image: apache/kafka:3.8.0
+    container_name: janmanch-kafka
+    ports:
+      - "9092:9092"
+
+volumes:
+  janmanch_mysql_data:

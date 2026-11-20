@@ -1,0 +1,50 @@
+spring:
+  application:
+    name: janmanch-backend
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/janmanch_db}
+    username: ${DB_USERNAME:janmanch}
+    password: ${DB_PASSWORD:janmanch_local}
+  jpa:
+    hibernate:
+      # "update" is convenient while developing. Before going public,
+      # switch to "validate" and manage schema changes with Flyway.
+      ddl-auto: update
+    open-in-view: false
+  servlet:
+    multipart:
+      max-file-size: 500MB
+      max-request-size: 510MB
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  cache:
+    # Set CACHE_TYPE=none to switch caching off for the "before" benchmark.
+    type: ${CACHE_TYPE:redis}
+    redis:
+      time-to-live: 60s
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: janmanch-video-processing
+      auto-offset-reset: earliest
+
+server:
+  port: ${PORT:8080}
+
+janmanch:
+  jwt:
+    # Local default only. In any deployed environment set JWT_SECRET
+    # to a random value of at least 32 characters.
+    secret: ${JWT_SECRET:local-dev-secret-change-me-before-deploying-0123456789}
+    expiry-minutes: ${JWT_EXPIRY_MINUTES:1440}
+  storage:
+    # "local" keeps files on disk; "s3" uses the bucket below.
+    type: ${STORAGE_TYPE:local}
+    local-dir: ${STORAGE_LOCAL_DIR:./data/media}
+    s3:
+      bucket: ${S3_BUCKET:janmanch-videos}
+      region: ${AWS_REGION:ap-south-1}
+  views:
+    flush-interval-ms: 60000

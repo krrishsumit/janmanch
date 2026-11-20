@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0E1014">
+    <title>Log in · JanManch</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="auth-page">
+    <form id="auth-form" class="auth-card panel" novalidate>
+        <a href="/" class="brand" aria-label="JanManch home">
+            <span class="brand-mark">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+            </span>
+            <span class="brand-name">JanManch</span>
+        </a>
+        <h1 id="heading">Welcome back</h1>
+        <div id="subheading" class="muted" style="text-align: center;">Log in to upload, like, comment and subscribe.</div>
+
+        <div id="name-field" class="field" hidden>
+            <label for="name">Your name</label>
+            <input id="name" type="text" maxlength="100" autocomplete="name">
+            <span class="hint">This is also your channel name. You can change it later.</span>
+        </div>
+        <div class="field">
+            <label for="email">Email</label>
+            <input id="email" type="email" autocomplete="email" required>
+        </div>
+        <div class="field">
+            <label for="password">Password</label>
+            <input id="password" type="password" minlength="8" autocomplete="current-password" required>
+            <span id="password-hint" class="hint" hidden>At least 8 characters.</span>
+        </div>
+
+        <div id="message" class="form-message error-text" role="alert"></div>
+        <button id="submit" type="submit" class="btn primary">Log in</button>
+
+        <div class="auth-switch muted">
+            <span id="switch-text">New to JanManch?</span>
+            <button id="toggle" type="button">Create an account</button>
+        </div>
+    </form>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+    let signup = new URLSearchParams(location.search).get("mode") === "signup";
+
+    // Only follow "next" links that stay on this site.
+    function nextUrl() {
+        const next = new URLSearchParams(location.search).get("next") || "/";
+        return next.startsWith("/") && !next.startsWith("//") ? next : "/";
+    }
+
+    if (getToken()) location.replace(nextUrl());
+
+    function paint() {
+        $("#heading").textContent = signup ? "Create your account" : "Welcome back";
+        $("#subheading").textContent = signup ? "Get your own channel and start uploading." : "Log in to upload, like, comment and subscribe.";
+        $("#submit").textContent = signup ? "Create account" : "Log in";
+        $("#name-field").hidden = !signup;
+        $("#password-hint").hidden = !signup;
+        $("#password").autocomplete = signup ? "new-password" : "current-password";
+        $("#switch-text").textContent = signup ? "Already have an account?" : "New to JanManch?";
+        $("#toggle").textContent = signup ? "Log in" : "Create an account";
+        $("#message").textContent = "";
+        document.title = (signup ? "Sign up" : "Log in") + " · JanManch";
+    }
+
+    $("#toggle").addEventListener("click", () => { signup = !signup; paint(); });
+
+    $("#auth-form").addEventListener("submit", async event => {
+        event.preventDefault();
+        const email = $("#email").value.trim();
+        const password = $("#password").value;
+        const name = $("#name").value.trim();
+        if (signup && !name) { $("#message").textContent = "Enter your name."; return; }
+        if (!email || !$("#email").checkValidity()) { $("#message").textContent = "Enter a valid email address."; return; }
+        if (signup && password.length < 8) { $("#message").textContent = "Use a password of at least 8 characters."; return; }
+        if (!password) { $("#message").textContent = "Enter your password."; return; }
+
+        const body = signup ? { name, email, password } : { email, password };
+        $("#submit").disabled = true;
+        try {
+            const auth = await api(signup ? "/auth/signup" : "/auth/login", { method: "POST", body });
+            saveLogin(auth);
+            location.href = nextUrl();
+        } catch (err) {
+            $("#message").textContent = err.status === 401 ? "Wrong email or password." : err.message;
+            $("#submit").disabled = false;
+        }
+    });
+
+    paint();
+</script>
+</body>
+</html>

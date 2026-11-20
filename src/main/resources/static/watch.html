@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0E1014">
+    <title>Watch · JanManch</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header id="topbar" class="topbar"></header>
+
+<div id="page" class="watch">
+    <main class="watch-main">
+        <section id="player" class="player" tabindex="0" aria-label="Video player">
+            <video id="video" playsinline preload="metadata"></video>
+            <div class="player-overlay">
+                <button id="big-play" type="button" class="big-play" aria-label="Play" hidden></button>
+                <div id="player-message" class="player-message" hidden></div>
+            </div>
+            <div id="controls" class="controls" hidden>
+                <label for="seek" class="sr-only">Seek</label>
+                <input id="seek" class="seek" type="range" min="0" max="1000" value="0" step="1">
+                <div class="controls-row">
+                    <button id="play" type="button" class="icon-btn" aria-label="Play"></button>
+                    <button id="mute" type="button" class="icon-btn" aria-label="Mute"></button>
+                    <span id="time" class="time">0:00 / 0:00</span>
+                    <span class="spacer"></span>
+                    <button id="speed" type="button" class="pill-btn" aria-label="Playback speed 1x">1x</button>
+                    <button id="fullscreen" type="button" class="icon-btn" aria-label="Full screen"></button>
+                </div>
+            </div>
+        </section>
+
+        <div id="info" hidden>
+            <h1 id="title" class="watch-title"></h1>
+            <div class="channel-row" style="margin-top: 14px;">
+                <a id="channel-avatar" href="#" tabindex="-1"></a>
+                <div>
+                    <a id="channel-name" href="#" style="font-weight: 700; font-size: 15px;"></a>
+                    <div id="subscribers" class="muted small"></div>
+                </div>
+                <button id="subscribe" type="button" class="btn light" hidden>Subscribe</button>
+                <span class="spacer"></span>
+                <div class="react-group">
+                    <button id="like" type="button" aria-pressed="false"></button>
+                    <span class="divider"></span>
+                    <button id="dislike" type="button" aria-pressed="false"></button>
+                </div>
+                <button id="share" type="button" class="btn filled"></button>
+                <span id="owner-tools"></span>
+            </div>
+            <div id="description" class="description collapsed" style="margin-top: 16px;">
+                <div id="views-date" style="font-weight: 700;"></div>
+                <div id="description-text" class="text"></div>
+                <button id="description-more" type="button" class="more" hidden>Show more</button>
+                <div id="tags" class="tags"></div>
+            </div>
+
+            <section class="comments" aria-labelledby="comments-heading">
+                <h2 id="comments-heading">Comments</h2>
+                <div id="comment-area"></div>
+                <div id="comment-list"></div>
+                <div class="row" style="justify-content: center;">
+                    <button id="comments-more" type="button" class="btn small" hidden>Show more comments</button>
+                </div>
+            </section>
+        </div>
+        <div id="status"></div>
+    </main>
+
+    <aside class="watch-side" aria-labelledby="up-next-heading">
+        <div class="side-head">
+            <h2 id="up-next-heading">Up next</h2>
+            <label class="row muted small" style="font-weight: 600; cursor: pointer; gap: 8px;">
+                Autoplay
+                <input id="autoplay" type="checkbox" style="width: 18px; height: 18px; accent-color: var(--accent);">
+            </label>
+        </div>
+        <div id="up-next" style="display: flex; flex-direction: column; gap: 14px;"></div>
+    </aside>
+</div>
+<nav id="bottom-nav" class="bottom-nav"></nav>
+
+<script src="/js/app.js"></script>
+<script>
+    renderShell(null);
+
+    const videoId = new URLSearchParams(location.search).get("id");
+    const player = $("#player");
+    const video = $("#video");
+    const seek = $("#seek");
+    let details = null;
+    let me = null;
+    let upNext = [];
+    let viewCounted = false;
+    let commentPage = 0;
+
+    // ---------- Player ----------
+
+    const SPEEDS = [1, 1.25, 1.5, 2, 0.75];
+
+    function setIcon(button, name, size) {
+        button.replaceChildren(icon(name, size || 20));
+    }
+
+    function paintPlayState() {
+        const playing = !video.paused && !video.ended;
+        player.classList.toggle("playing", playing);
+        setIcon($("#play"), playing ? "pause" : "play");
+        $("#play").setAttribute("aria-label", playing ? "Pause" : "Play");
+        setIcon($("#big-play"), "play", 34);
+    }
+
+    function paintTime() {
+        const duration = video.duration || 0;
+        const ratio = duration ? video.currentTime / duration : 0;
+        if (!seek.matches(":active")) seek.value = Math.round(ratio * 1000);
+        seek.style.setProperty("--p", (ratio * 100) + "%");
+        $("#time").textContent = formatDuration(video.currentTime) + " / " + formatDuration(duration);
+    }
+
+    function togglePlay() {
+        if (video.paused || video.ended) video.play().catch(() => {});
+        else video.pause();
+    }
+
+    function toggleFullscreen() {
+        if (document.fullscreenElement) document.exitFullscreen();
+        else if (player.requestFullscreen) player.requestFullscreen();
+    }
+
+    function setupPlayer(streamUrl, posterUrl) {
+        video.src = streamUrl;
+        if (posterUrl) video.poster = posterUrl;
+        $("#controls").hidden = false;
+        $("#big-play").hidden = false;
+        $("#player-message").hidden = true;
+        setIcon($("#mute"), "volume");
+        setIcon($("#fullscreen"), "fullscreen");
+        paintPlayState();
+    }
+
+    $("#big-play").addEventListener("click", togglePlay);
+    $("#play").addEventListener("click", togglePlay);
+    video.addEventListener("click", togglePlay);
+    video.addEventListener("play", paintPlayState);
+    video.addEventListener("pause", paintPlayState);
+    video.addEventListener("timeupdate", paintTime);
+    video.addEventListener("loadedmetadata", paintTime);
+    video.addEventListener("ended", () => {
+        paintPlayState();
+        if ($("#autoplay").checked && upNext.length) location.href = watchUrl(upNext[0].id);
+    });
+
+    // Count the view once, when playback actually starts.
+    video.addEventListener("playing", () => {
+        if (viewCounted) return;
+        viewCounted = true;
+        api("/videos/" + encodeURIComponent(videoId) + "/view", { method: "POST" }).catch(() => {});
+    });
+
+    seek.addEventListener("input", () => {
+        if (video.duration) video.currentTime = (seek.value / 1000) * video.duration;
+        paintTime();
+    });
+
+    $("#mute").addEventListener("click", () => {
+        video.muted = !video.muted;
+        setIcon($("#mute"), video.muted ? "mute" : "volume");
+        $("#mute").setAttribute("aria-label", video.muted ? "Unmute" : "Mute");
+    });
+
+    $("#speed").addEventListener("click", () => {
+        const next = SPEEDS[(SPEEDS.indexOf(video.playbackRate) + 1) % SPEEDS.length];
+        video.playbackRate = next;
+        $("#speed").textContent = next + "x";
+        $("#speed").setAttribute("aria-label", "Playback speed " + next + "x");
+    });
+
+    $("#fullscreen").addEventListener("click", toggleFullscreen);
+    video.addEventListener("dblclick", toggleFullscreen);
+
+    // Keyboard shortcuts while the player has focus: space/k, arrows, f, m.
+    player.addEventListener("keydown", event => {
+        if (event.target !== player && event.target !== video) return;
+        const key = event.key.toLowerCase();
+        if (key === " " || key === "k") { event.preventDefault(); togglePlay(); }
+        else if (key === "arrowright") { video.currentTime = Math.min(video.duration || 0, video.currentTime + 5); }
+        else if (key === "arrowleft") { video.currentTime = Math.max(0, video.currentTime - 5); }
+        else if (key === "f") { toggleFullscreen(); }
+        else if (key === "m") { $("#mute").click(); }
+    });
+
+    function showPlayerMessage(title, text) {
+        const box = $("#player-message");
+        box.replaceChildren(icon("film", 40, 1.5), el("h2", {}, title), el("div", {}, text));
+        box.hidden = false;
+        player.style.background = "#1B2638";
+    }
+
+    // ---------- Details ----------
+
+    function paintReactions() {
+        const like = $("#like");
+        const dislike = $("#dislike");
+        like.replaceChildren(icon("like", 18), compactNumber(details.likes));
+        dislike.replaceChildren(icon("dislike", 18), compactNumber(details.dislikes));
+        like.setAttribute("aria-pressed", String(details.myReaction === "LIKE"));
+        dislike.setAttribute("aria-pressed", String(details.myReaction === "DISLIKE"));
+        like.setAttribute("aria-label", "Like, " + details.likes);
+        dislike.setAttribute("aria-label", "Dislike, " + details.dislikes);
+    }
+
+    function paintSubscribe() {
+        const button = $("#subscribe");
+        button.className = details.subscribed ? "btn filled" : "btn light";
+        button.textContent = details.subscribed ? "Subscribed" : "Subscribe";
+        $("#subscribers").textContent = formatCount(details.subscriberCount, "subscriber", "subscribers");
+    }
+
+    async function react(type) {
+        if (!getToken()) { location.href = loginUrl(); return; }
+        const next = details.myReaction === type ? "NONE" : type;
+        try {
+            const result = await api("/videos/" + details.id + "/reaction", { method: "PUT", body: { reaction: next } });
+            details.likes = result.likes;
+            details.dislikes = result.dislikes;
+            details.myReaction = result.myReaction;
+            paintReactions();
+        } catch (err) { toast(err.message); }
+    }
+
+    $("#like").addEventListener("click", () => react("LIKE"));
+    $("#dislike").addEventListener("click", () => react("DISLIKE"));
+
+    $("#subscribe").addEventListener("click", async () => {
+        if (!getToken()) { location.href = loginUrl(); return; }
+        try {
+            const result = await api("/channels/" + details.channelId + "/subscribe",
+                { method: details.subscribed ? "DELETE" : "POST" });
+            details.subscribed = result.subscribed;
+            details.subscriberCount = result.subscriberCount;
+            paintSubscribe();
+            toast(details.subscribed ? "Subscribed to " + details.channelName : "Unsubscribed");
+        } catch (err) { toast(err.message); }
+    });
+
+    $("#share").replaceChildren(icon("share", 18), "Share");
+    $("#share").addEventListener("click", async () => {
+        const url = location.origin + watchUrl(videoId);
+        try {
+            if (navigator.share) { await navigator.share({ title: details.title, url }); return; }
+            await navigator.clipboard.writeText(url);
+            toast("Link copied");
+        } catch (err) { /* share sheet closed */ }
+    });
+
+    $("#description-more").addEventListener("click", () => {
+        const box = $("#description");
+        const collapsed = box.classList.toggle("collapsed");
+        $("#description-more").textContent = collapsed ? "Show more" : "Show less";
+    });
+
+    function renderDetails() {
+        document.title = details.title + " · JanManch";
+        $("#title").textContent = details.title;
+        $("#channel-avatar").href = channelUrl(details.channelId);
+        $("#channel-avatar").replaceChildren(avatar(details.channelName, 44));
+        $("#channel-name").href = channelUrl(details.channelId);
+        $("#channel-name").textContent = details.channelName;
+        const own = me && me.channelId === details.channelId;
+        $("#subscribe").hidden = own;
+        paintSubscribe();
+        paintReactions();
+
+        $("#views-date").textContent = formatCount(details.viewCount, "view", "views") + " · " + formatDate(details.uploadedAt);
+        const text = details.description && details.description.trim() ? details.description : "No description.";
+        $("#description-text").textContent = text;
+        $("#description-more").hidden = text.length < 220 && text.split("\n").length < 4;
+        if ($("#description-more").hidden) $("#description").classList.remove("collapsed");
+        $("#tags").replaceChildren(...details.tags.map(tag =>
+            el("a", { href: "/?q=" + encodeURIComponent(tag) }, "#" + tag)));
+
+        if (own) {
+            $("#owner-tools").replaceChildren(confirmButton("Delete", "Click again to delete", async () => {
+                try {
+                    await api("/videos/" + details.id, { method: "DELETE" });
+                    location.href = "/studio.html";
+                } catch (err) { toast(err.message); }
+            }));
+        }
+        $("#info").hidden = false;
+    }
+
+    async function loadDetails() {
+        details = await api("/videos/" + encodeURIComponent(videoId));
+        renderDetails();
+        if (details.status === "READY" && details.streamUrl) {
+            if (!video.src) setupPlayer(details.streamUrl, details.thumbnailUrl);
+        } else if (details.status === "PROCESSING") {
+            showPlayerMessage("Processing your video", "This usually takes a few seconds. The page will update by itself.");
+            setTimeout(() => loadDetails().catch(() => {}), 5000);
+        } else {
+            showPlayerMessage("This video couldn't be processed", "The file may be damaged or in a format we can't read.");
+        }
+    }
+
+    // ---------- Comments ----------
+
+    function renderCommentForm() {
+        const area = $("#comment-area");
+        if (!getToken()) {
+            area.replaceChildren(el("div", { class: "row muted" },
+                el("a", { href: loginUrl(), class: "btn small primary" }, "Log in"), "to join the conversation."));
+            return;
+        }
+        const textarea = el("textarea", { id: "comment-text", rows: "2", maxlength: "2000", placeholder: "Add a comment…", required: true });
+        const submit = el("button", { type: "submit", class: "btn small primary", disabled: true }, "Comment");
+        textarea.addEventListener("input", () => { submit.disabled = !textarea.value.trim(); });
+        const form = el("form", { class: "comment-form" },
+            avatar(getName(), 40),
+            el("div", { class: "fields" },
+                el("label", { for: "comment-text", class: "sr-only" }, "Add a comment"),
+                textarea,
+                el("div", { class: "actions" },
+                    el("button", { type: "reset", class: "btn small", onclick: () => { submit.disabled = true; } }, "Cancel"),
+                    submit)));
+        form.addEventListener("submit", async event => {
+            event.preventDefault();
+            submit.disabled = true;
+            try {
+                const comment = await api("/videos/" + details.id + "/comments", { method: "POST", body: { text: textarea.value } });
+                textarea.value = "";
+                $("#comment-list").prepend(commentItem(comment));
+                bumpCommentCount(1);
+            } catch (err) {
+                toast(err.message);
+                submit.disabled = false;
+            }
+        });
+        area.replaceChildren(form);
+    }
+
+    let commentTotal = 0;
+    function bumpCommentCount(delta) {
+        commentTotal += delta;
+        $("#comments-heading").textContent = formatCount(commentTotal, "comment", "comments");
+    }
+
+    function commentItem(comment) {
+        const node = el("article", { class: "comment" },
+            avatar(comment.userName, 40),
+            el("div", { class: "body" },
+                el("div", {}, el("strong", {}, comment.userName),
+                    el("span", { class: "muted small", style: { marginLeft: "8px" } }, timeAgo(comment.createdAt))),
+                el("div", { class: "text" }, comment.text)));
+        if (me && me.userId === comment.userId) {
+            node.querySelector(".body").append(el("div", { class: "tools" },
+                confirmButton("Delete", "Click again to delete", async () => {
+                    try {
+                        await api("/comments/" + comment.id, { method: "DELETE" });
+                        node.remove();
+                        bumpCommentCount(-1);
+                    } catch (err) { toast(err.message); }
+                }, "link-btn")));
+        }
+        return node;
+    }
+
+    async function loadComments() {
+        try {
+            const result = await api("/videos/" + encodeURIComponent(videoId) + "/comments?size=20&page=" + commentPage);
+            if (commentPage === 0) {
+                commentTotal = result.totalItems;
+                bumpCommentCount(0);
+                if (!result.items.length) {
+                    $("#comment-list").replaceChildren(el("div", { class: "muted" }, "No comments yet. Start the conversation."));
+                }
+            }
+            for (const comment of result.items) $("#comment-list").append(commentItem(comment));
+            $("#comments-more").hidden = commentPage + 1 >= result.totalPages;
+        } catch (err) {
+            $("#comment-list").append(el("div", { class: "error-text" }, err.message));
+        }
+    }
+
+    $("#comments-more").addEventListener("click", () => { commentPage++; loadComments(); });
+
+    // ---------- Up next ----------
+
+    async function loadUpNext() {
+        const box = $("#up-next");
+        try {
+            const result = await api("/videos/feed?size=16");
+            upNext = result.items.filter(v => String(v.id) !== String(videoId)).slice(0, 15);
+            box.replaceChildren(...upNext.map(compactCard));
+            if (!upNext.length) box.replaceChildren(el("div", { class: "muted" }, "More videos will appear here."));
+        } catch (err) {
+            box.replaceChildren(el("div", { class: "error-text" }, err.message));
+        }
+    }
+
+    try {
+        $("#autoplay").checked = localStorage.getItem("janmanch_autoplay") === "on";
+    } catch (e) { /* ignore */ }
+    $("#autoplay").addEventListener("change", () => {
+        try { localStorage.setItem("janmanch_autoplay", $("#autoplay").checked ? "on" : "off"); } catch (e) { /* ignore */ }
+    });
+
+    // ---------- Start ----------
+
+    (async () => {
+        if (!videoId) {
+            $("#status").replaceChildren(stateBox("No video selected", "Pick a video from the home page.",
+                el("a", { href: "/", class: "btn" }, "Go home")));
+            player.hidden = true;
+            return;
+        }
+        if (getToken()) {
+            try { me = await api("/users/me"); } catch (e) { me = null; }
+        }
+        loadUpNext();
+        try {
+            await loadDetails();
+            renderCommentForm();
+            loadComments();
+        } catch (err) {
+            player.hidden = true;
+            $("#status").replaceChildren(stateBox(err.status === 404 ? "Video not found" : "Couldn't load this video",
+                err.status === 404 ? "It may have been deleted." : err.message,
+                el("a", { href: "/", class: "btn" }, "Go home")));
+        }
+    })();
+</script>
+</body>
+</html>

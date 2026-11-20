@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0E1014">
+    <title>Studio · JanManch</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header id="topbar" class="topbar"></header>
+<div class="layout">
+    <nav id="sidebar" class="sidebar"></nav>
+    <main id="content" class="content">
+        <div class="page-head">
+            <span id="channel-avatar"></span>
+            <div style="flex: 1; min-width: 200px;">
+                <h1 id="channel-name" style="margin: 0; font-size: 28px;">Your studio</h1>
+                <div id="channel-sub" class="muted"></div>
+            </div>
+            <a id="view-channel" href="#" class="btn" hidden>View channel</a>
+            <a href="/upload.html" class="btn primary">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                Upload video
+            </a>
+        </div>
+
+        <div id="stats" class="stats"></div>
+        <div id="processing"></div>
+
+        <section class="table-panel panel" aria-labelledby="videos-title">
+            <div class="toolbar">
+                <span id="videos-title" class="title">Videos</span>
+                <label for="status-filter" class="sr-only">Filter by status</label>
+                <select id="status-filter" class="btn small" style="background: var(--surface-2);">
+                    <option value="ALL">All statuses</option>
+                    <option value="READY">Ready</option>
+                    <option value="PROCESSING">Processing</option>
+                    <option value="FAILED">Failed</option>
+                </select>
+            </div>
+            <div class="table-scroll">
+                <table class="videos">
+                    <thead>
+                    <tr>
+                        <th scope="col">Video</th>
+                        <th scope="col">Status</th>
+                        <th scope="col" class="num">Views</th>
+                        <th scope="col" class="num">Likes</th>
+                        <th scope="col" class="num">Comments</th>
+                        <th scope="col">Uploaded</th>
+                        <th scope="col"><span class="sr-only">Actions</span></th>
+                    </tr>
+                    </thead>
+                    <tbody id="rows"></tbody>
+                </table>
+            </div>
+            <div id="table-state"></div>
+        </section>
+    </main>
+</div>
+<nav id="bottom-nav" class="bottom-nav"></nav>
+
+<script src="/js/app.js"></script>
+<script>
+    if (requireLogin()) {
+        renderShell("studio", { subtitle: "Studio" });
+
+        let videos = [];
+        let channel = null;
+        let pollTimer = null;
+
+        function stat(label, value, note) {
+            return el("div", { class: "stat panel" },
+                el("div", { class: "label" }, label),
+                el("div", { class: "value" }, value),
+                note ? el("div", { class: "muted small" }, note) : null);
+        }
+
+        function renderStats() {
+            const sum = key => videos.reduce((total, v) => total + v[key], 0);
+            const count = s => videos.filter(v => v.status === s).length;
+            const parts = [];
+            if (count("READY")) parts.push(count("READY") + " live");
+            if (count("PROCESSING")) parts.push(count("PROCESSING") + " processing");
+            if (count("FAILED")) parts.push(count("FAILED") + " failed");
+            $("#stats").replaceChildren(
+                stat("Total views", sum("viewCount").toLocaleString(), "Across all your videos"),
+                stat("Likes", sum("likes").toLocaleString()),
+                stat("Comments", sum("comments").toLocaleString()),
+                stat("Subscribers", channel ? channel.subscriberCount.toLocaleString() : "—"),
+                stat("Videos", String(videos.length), parts.join(" · ") || "Nothing uploaded yet"));
+        }
+
+        function renderProcessing() {
+            const box = $("#processing");
+            box.replaceChildren(...videos.filter(v => v.status === "PROCESSING").map(v =>
+                el("section", { class: "processing", "aria-label": "Processing " + v.title },
+                    thumbnail(v, { iconSize: 28 }),
+                    el("div", { class: "info" },
+                        el("div", { class: "row" }, el("strong", {}, v.title), el("span", { class: "badge PROCESSING" }, "PROCESSING")),
+                        el("div", { class: "progress indeterminate", role: "progressbar", "aria-label": "Processing" },
+                            el("div", { class: "bar" })),
+                        el("div", { class: "muted small" }, "Upload complete · creating the thumbnail and reading the duration. This page updates by itself.")))));
+        }
+
+        async function deleteVideo(video) {
+            try {
+                await api("/videos/" + video.id, { method: "DELETE" });
+                videos = videos.filter(v => v.id !== video.id);
+                render();
+                toast("Video deleted");
+            } catch (err) { toast(err.message); }
+        }
+
+        function renderRows() {
+            const filter = $("#status-filter").value;
+            const shown = videos.filter(v => filter === "ALL" || v.status === filter);
+            const ready = v => v.status === "READY";
+            $("#rows").replaceChildren(...shown.map(v => el("tr", {},
+                el("td", {}, el("div", { class: "video-cell" },
+                    thumbnail(v, { href: ready(v) ? watchUrl(v.id) : null, iconSize: 22 }),
+                    el("div", { class: "card-text" },
+                        ready(v) ? el("a", { href: watchUrl(v.id), class: "card-title" }, v.title)
+                                 : el("span", { class: "card-title" }, v.title),
+                        el("span", { class: "muted small" },
+                            v.durationSeconds ? formatDuration(v.durationSeconds) : (v.status === "FAILED" ? "Could not be processed" : "Processing"))))),
+                el("td", {}, el("span", { class: "badge " + v.status }, v.status)),
+                el("td", { class: "num" }, ready(v) ? v.viewCount.toLocaleString() : "—"),
+                el("td", { class: "num" }, ready(v) ? v.likes.toLocaleString() : "—"),
+                el("td", { class: "num" }, ready(v) ? v.comments.toLocaleString() : "—"),
+                el("td", { class: "muted" }, formatDate(v.uploadedAt)),
+                el("td", {}, confirmButton("Delete", "Confirm", () => deleteVideo(v))))));
+
+            const state = $("#table-state");
+            if (!videos.length) {
+                state.replaceChildren(stateBox("No videos yet", "Upload your first video to start your channel.",
+                    el("a", { href: "/upload.html", class: "btn primary" }, icon("plus", 18), "Upload video")));
+            } else if (!shown.length) {
+                state.replaceChildren(stateBox("Nothing with this status", null));
+            } else {
+                state.replaceChildren();
+            }
+        }
+
+        function render() {
+            renderStats();
+            renderProcessing();
+            renderRows();
+        }
+
+        async function loadVideos() {
+            const result = await api("/users/me/videos?size=50");
+            videos = result.items;
+            render();
+            clearTimeout(pollTimer);
+            if (videos.some(v => v.status === "PROCESSING")) {
+                pollTimer = setTimeout(() => loadVideos().catch(() => {}), 5000);
+            }
+        }
+
+        $("#status-filter").addEventListener("change", renderRows);
+
+        (async () => {
+            try {
+                const me = await api("/users/me");
+                if (me.channelId) {
+                    channel = await api("/channels/" + me.channelId);
+                    $("#channel-avatar").replaceChildren(avatar(channel.name, 56));
+                    $("#channel-name").textContent = channel.name;
+                    $("#channel-sub").textContent = "Your channel · " + formatCount(channel.subscriberCount, "subscriber", "subscribers");
+                    $("#view-channel").href = channelUrl(channel.id);
+                    $("#view-channel").hidden = false;
+                }
+                await loadVideos();
+            } catch (err) {
+                if (err.status === 401) { location.href = loginUrl(); return; }
+                $("#table-state").replaceChildren(stateBox("Couldn't load your studio", err.message,
+                    el("button", { type: "button", class: "btn", onclick: () => location.reload() }, "Try again")));
+            }
+        })();
+    }
+</script>
+</body>
+</html>
