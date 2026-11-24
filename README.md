@@ -34,8 +34,24 @@ Browser ──► Spring Boot API ──► MySQL        (users, videos, comment
 
 - Java 17 or newer, Maven 3.9+
 - Docker (MySQL, Redis and Kafka run in containers)
-- FFmpeg on your PATH (optional locally: without it videos still play, but have
-  no thumbnail or duration)
+- FFmpeg (optional locally): without it videos still play and the site shows a
+  frame from the video instead of a thumbnail
+
+### Installing FFmpeg on Windows
+
+```powershell
+winget install Gyan.FFmpeg
+```
+
+Close and reopen the terminal (and IntelliJ), then check with `ffmpeg -version`.
+If FFmpeg is installed elsewhere, point the app to it instead:
+
+```powershell
+$env:FFMPEG_PATH="C:\ffmpeg\bin\ffmpeg.exe"
+$env:FFPROBE_PATH="C:\ffmpeg\bin\ffprobe.exe"
+```
+
+On start-up the app creates thumbnails for any older videos that have none.
 
 ## Run locally
 

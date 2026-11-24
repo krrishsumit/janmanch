@@ -1,5 +1,6 @@
 package com.janmanch.video;
 
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -48,6 +49,8 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
             """)
     Page<Video> findSubscriptionFeed(@Param("userId") Long userId, @Param("status") VideoStatus status,
                                      Pageable pageable);
+
+    List<Video> findTop50ByStatusAndThumbnailKeyIsNull(VideoStatus status);
 
     @Modifying
     @Query("update Video v set v.viewCount = v.viewCount + :views where v.id = :id")

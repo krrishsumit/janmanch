@@ -29,7 +29,7 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         // Front-end pages and locally stored media files.
                         .requestMatchers(HttpMethod.GET, "/", "/*.html", "/css/**", "/js/**",
-                                "/favicon.ico", "/media/**").permitAll()
+                                "/favicon.ico", "/*.svg", "/media/**").permitAll()
                         // The subscriptions feed needs a login; it must be listed before /videos/**.
                         .requestMatchers(HttpMethod.GET, "/videos/subscriptions").authenticated()
                         // Anyone can browse, watch and search.

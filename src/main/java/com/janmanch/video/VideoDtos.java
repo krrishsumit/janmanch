@@ -11,9 +11,9 @@ public final class VideoDtos {
     }
 
     /** One card in a feed or search result. Serializable for the Redis cache. */
-    public record VideoSummary(Long id, String title, String thumbnailUrl, Long channelId,
-                               String channelName, long viewCount, Integer durationSeconds,
-                               Instant uploadedAt) implements Serializable {
+    public record VideoSummary(Long id, String title, String thumbnailUrl, String previewUrl,
+                               Long channelId, String channelName, long viewCount,
+                               Integer durationSeconds, Instant uploadedAt) implements Serializable {
     }
 
     /** Everything the watch page needs. */
@@ -30,7 +30,7 @@ public final class VideoDtos {
 
     /** One row in the creator studio: includes videos that are not READY yet. */
     public record StudioVideo(Long id, String title, String status, String thumbnailUrl,
-                              Integer durationSeconds, long viewCount, long likes, long comments,
+                              String previewUrl, Integer durationSeconds, long viewCount, long likes, long comments,
                               Instant uploadedAt) {
     }
 

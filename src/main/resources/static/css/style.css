@@ -87,11 +87,9 @@ h1, h2, h3 { font-family: var(--display); letter-spacing: -0.3px; }
 }
 
 .brand { display: flex; align-items: center; gap: 10px; }
-.brand-mark {
-    width: 34px; height: 34px; border-radius: 9px; background: var(--accent); color: var(--on-accent);
-    display: flex; align-items: center; justify-content: center; flex: none;
-}
-.brand-name { font-family: var(--display); font-weight: 700; font-size: 21px; letter-spacing: -0.3px; }
+.brand-mark { display: block; flex: none; }
+.brand-name { font-family: var(--display); font-weight: 700; font-size: 22px; letter-spacing: -0.5px; }
+.brand-name .accent { color: var(--accent); }
 .brand-name .sub { color: var(--muted); font-weight: 600; }
 
 .search { flex: 1 1 320px; max-width: 640px; margin: 0 auto; display: flex; }
@@ -205,7 +203,9 @@ h1, h2, h3 { font-family: var(--display); letter-spacing: -0.3px; }
     position: relative; display: block; aspect-ratio: 16 / 9; border-radius: var(--radius); overflow: hidden;
     color: rgba(255, 255, 255, 0.35);
 }
-.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb img, .thumb video {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none;
+}
 .thumb .placeholder { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
 .thumb .duration {
     position: absolute; right: 8px; bottom: 8px; padding: 2px 6px; border-radius: 5px;
@@ -215,8 +215,8 @@ h1, h2, h3 { font-family: var(--display); letter-spacing: -0.3px; }
     position: absolute; left: 12px; top: 12px; padding: 5px 10px; border-radius: 6px;
     background: var(--accent); color: var(--on-accent); font-size: 12px; font-weight: 700; letter-spacing: 0.4px;
 }
-a.thumb:hover img { transform: scale(1.03); }
-.thumb img { transition: transform 0.25s ease; }
+a.thumb:hover img, a.thumb:hover video { transform: scale(1.03); }
+.thumb img, .thumb video { transition: transform 0.25s ease; }
 
 .card { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .card-body { display: flex; gap: 12px; }

@@ -48,3 +48,8 @@ janmanch:
       region: ${AWS_REGION:ap-south-1}
   views:
     flush-interval-ms: 60000
+  ffmpeg:
+    # Full paths are needed only if ffmpeg/ffprobe are not on the PATH,
+    # e.g. FFMPEG_PATH=C:\\ffmpeg\\bin\\ffmpeg.exe on Windows.
+    ffmpeg-path: ${FFMPEG_PATH:ffmpeg}
+    ffprobe-path: ${FFPROBE_PATH:ffprobe}

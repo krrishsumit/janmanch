@@ -208,6 +208,12 @@ function thumbnail(video, options = {}) {
     });
     if (video.thumbnailUrl) {
         box.append(el("img", { src: video.thumbnailUrl, alt: "", loading: "lazy" }));
+    } else if (video.previewUrl) {
+        // No thumbnail yet (e.g. FFmpeg not installed): show a frame from the video itself.
+        const frame = el("video", { src: video.previewUrl + "#t=1", preload: "metadata", muted: true,
+            playsinline: true, tabindex: "-1", "aria-hidden": "true" });
+        frame.muted = true;
+        box.append(el("span", { class: "placeholder" }, icon("film", options.iconSize || 36, 1.5)), frame);
     } else {
         box.append(el("span", { class: "placeholder" }, icon("film", options.iconSize || 36, 1.5)));
     }
@@ -317,10 +323,31 @@ function renderShell(active, options = {}) {
     if (bottom) renderBottomNav(bottom, active);
 }
 
+// The JanManch mark: a stage arch with a play button and an audience below.
+const LOGO_MARK = '<rect width="48" height="48" rx="13" fill="#F5A04A"/>'
+    + '<path d="M12 35.5V22a12 12 0 0 1 24 0v13.5z" fill="#E0832B"/>'
+    + '<path d="M12 35.5V22a12 12 0 0 1 24 0v13.5" fill="none" stroke="#16110A" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>'
+    + '<path d="M8.5 35.5h31" stroke="#16110A" stroke-width="3.2" stroke-linecap="round"/>'
+    + '<path d="M21 20.5v10.6l8.6-5.3z" fill="#FFF4E6" stroke="#FFF4E6" stroke-width="2" stroke-linejoin="round"/>'
+    + '<circle cx="16.5" cy="41" r="1.6" fill="#16110A"/><circle cx="24" cy="41" r="1.6" fill="#16110A"/>'
+    + '<circle cx="31.5" cy="41" r="1.6" fill="#16110A"/>';
+
+function logoMark(size = 36) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 48 48");
+    svg.setAttribute("width", size);
+    svg.setAttribute("height", size);
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("class", "brand-mark");
+    svg.innerHTML = LOGO_MARK;
+    return svg;
+}
+
 function brand(subtitle) {
     return el("a", { href: "/", class: "brand", "aria-label": "JanManch home" },
-        el("span", { class: "brand-mark" }, icon("play", 16)),
-        el("span", { class: "brand-name" }, "JanManch", subtitle ? el("span", { class: "sub" }, " " + subtitle) : null));
+        logoMark(36),
+        el("span", { class: "brand-name" }, "Jan", el("span", { class: "accent" }, "Manch"),
+            subtitle ? el("span", { class: "sub" }, " " + subtitle) : null));
 }
 
 function renderTopbar(topbar, options) {

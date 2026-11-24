@@ -172,6 +172,7 @@ public class VideoService {
                 .map(video -> new StudioVideo(
                         video.getId(), video.getTitle(), video.getStatus().name(),
                         video.getThumbnailKey() != null ? storage.urlFor(video.getThumbnailKey()) : null,
+                        previewUrlFor(video),
                         video.getDurationSeconds(), video.getViewCount(),
                         likeRepository.countByIdVideoIdAndType(video.getId(), LikeType.LIKE),
                         commentRepository.countByVideoId(video.getId()),
@@ -253,8 +254,18 @@ public class VideoService {
         return new VideoSummary(
                 video.getId(), video.getTitle(),
                 video.getThumbnailKey() != null ? storage.urlFor(video.getThumbnailKey()) : null,
+                previewUrlFor(video),
                 video.getChannel().getId(), video.getChannel().getName(),
                 video.getViewCount(), video.getDurationSeconds(), video.getUploadedAt());
+    }
+
+    /**
+     * Link to the video file, used by the browser to show a frame when no
+     * thumbnail exists (for example when FFmpeg is not installed).
+     */
+    private String previewUrlFor(Video video) {
+        return video.getThumbnailKey() == null && video.getStatus() == VideoStatus.READY && video.getS3Key() != null
+                ? storage.urlFor(video.getS3Key()) : null;
     }
 
     private Pageable newestFirst(int page, int size) {
